@@ -17,10 +17,6 @@ const fetchAssets = async () => {
   return messinaAssets;
 }
 
-const tvlAlgo = async () => await processTvl(tokenChain.algorand);
-
-const tvlEth = async () => await processTvl(tokenChain.ethereum);
-
 const processTvl = async (chain) => {
   let balances = {};
 
@@ -44,6 +40,9 @@ const processTvl = async (chain) => {
   return balances;
 }
 
+const tvlAlgo = async () => await processTvl(tokenChain.algorand);
+
+const tvlEth = async () => await processTvl(tokenChain.ethereum);
 
 module.exports = {
   ethereum: { tvl: tvlEth },
