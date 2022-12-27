@@ -3,12 +3,13 @@
   ==================================================*/
 
 const sdk = require('@defillama/sdk');
+const { getAppGlobalState } = require("../helper/chain/algorand")
 
 /*==================================================
  Vars
  ==================================================*/
 
-const listTokens = [
+const listEthTokens = [
   {
     token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',    // USDC
     escrow: '0x8B1AA5cc114b20928734D6BFe47F876DFCfD36dD'
@@ -23,15 +24,30 @@ const listTokens = [
   }
 ];
 
+const listAlgoTokens = [
+  {
+    escrowId: '900381763',
+    coingecko: 'gobtc'
+  },
+  {
+    escrowId: '896057431',
+    coingecko: 'usd-coin'
+  },
+  {
+    escrowId: '900398301',
+    coingecko: 'goeth'
+  }
+];
+
 /*==================================================
   TVL
   ==================================================*/
 
-async function tvl(timestamp, block) {
+async function tvlEth(timestamp, block) {
   let balances = {};
 
   let calls = [];
-  listTokens.forEach((tokenData) => {
+  listEthTokens.forEach((tokenData) => {
     calls.push({
       target: tokenData.token,
       params: tokenData.escrow
@@ -43,8 +59,28 @@ async function tvl(timestamp, block) {
     calls,
     abi: 'erc20:balanceOf'
   });
-
   sdk.util.sumMultiBalanceOf(balances, balanceOfResults, true);
+
+  return balances;
+}
+
+
+async function tvlAlgo() {
+  let promises = [];
+  let balances = {};
+
+  listAlgoTokens.forEach((tokenData) => {
+    promises.push(getAppGlobalState(tokenData.escrowId));
+  });
+
+  const results = await Promise.all(promises);
+
+  results.forEach((result, idx) => {
+    const total = (result.ain - result.aout) / 1e6; // amount in - amount out
+
+    sdk.util.sumSingleBalance(balances, listAlgoTokens[idx].coingecko , total);
+  });
+  
   return balances;
 }
 
@@ -54,5 +90,6 @@ async function tvl(timestamp, block) {
 
 module.exports = {
   start: 1665446400, // Oct 11, 2022 00:00:00 GMT
-  ethereum: { tvl }
+  ethereum: { tvl: tvlEth },
+  algorand: { tvl: tvlAlgo}
 }
