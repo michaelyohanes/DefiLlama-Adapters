@@ -1,95 +1,80 @@
-/*==================================================
-  Modules
-  ==================================================*/
+const { get } = require('../helper/http')
+const { fixBalancesTokens } = require('../helper/tokenMapping');
 
-const sdk = require('@defillama/sdk');
-const { getAppGlobalState } = require("../helper/chain/algorand")
-
-/*==================================================
- Vars
- ==================================================*/
-
-const listEthTokens = [
+const tokenDecimals = [
   {
-    token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',    // USDC
-    escrow: '0x8B1AA5cc114b20928734D6BFe47F876DFCfD36dD'
+    id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    decimals: 6
   },
   {
-    token: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',    // WBTC
-    escrow: '0x3F3B7F62BF8a119ecA3f1Bff0d2a946BF331de89'
+    id: '31566704',
+    decimals: 6
   },
   {
-    token: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',    // WETH
-    escrow: '0xd3c09c07eD5371ca76511ad1ff4Cf357d7dBC108'
+    id: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599',
+    decimals: 8
+  },
+  {
+    id: '386192725',
+    decimals: 8
+  },
+  {
+    id: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    decimals: 18
+  },
+  {
+    id: '386195940',
+    decimals: 8
   }
 ];
 
-const listAlgoTokens = [
-  {
-    escrowId: '900381763',
-    coingecko: 'gobtc'
-  },
-  {
-    escrowId: '896057431',
-    coingecko: 'usd-coin'
-  },
-  {
-    escrowId: '900398301',
-    coingecko: 'goeth'
-  }
-];
 
-/*==================================================
-  TVL
-  ==================================================*/
+async function fetchData(chain) {
+  const url = 'https://messina.one/api/stats/tvl-details';
+  const response = await get(url);
+  const tvl = {};
 
-async function tvlEth(timestamp, block) {
-  let balances = {};
+  response.forEach((r) => {
+    const { assets } = r;
 
-  let calls = [];
-  listEthTokens.forEach((tokenData) => {
-    calls.push({
-      target: tokenData.token,
-      params: tokenData.escrow
-    });
+    assets.forEach((asset) => {
+      const { chainId, id, amount } = asset;
+      let { decimals } = asset;
+      
+      if (chainId == chain) {
+        if (chain == 2) {
+          // if decimals not found on api response, then query from tokenDecimals
+          if (!decimals) {
+            decimals = tokenDecimals.find(n => n.id == id.toLowerCase())?.decimals || 1;
+          }
+
+          tvl[id] = amount * (10 ** decimals);
+        } else {
+          // get coingeckoId
+          const { coingeckoId } = fixBalancesTokens.algorand[id];
+
+          tvl[coingeckoId] = amount;
+        }
+      }
+    })
   });
 
-  let balanceOfResults = await sdk.api.abi.multiCall({
-    block,
-    calls,
-    abi: 'erc20:balanceOf'
-  });
-  sdk.util.sumMultiBalanceOf(balances, balanceOfResults, true);
+  return tvl;
+}
 
-  return balances;
+async function tvlEth() {
+  return await fetchData(2);
 }
 
 
 async function tvlAlgo() {
-  let promises = [];
-  let balances = {};
-
-  listAlgoTokens.forEach((tokenData) => {
-    promises.push(getAppGlobalState(tokenData.escrowId));
-  });
-
-  const results = await Promise.all(promises);
-
-  results.forEach((result, idx) => {
-    const total = (result.ain - result.aout) / 1e6; // amount in - amount out
-
-    sdk.util.sumSingleBalance(balances, listAlgoTokens[idx].coingecko , total);
-  });
-  
-  return balances;
+  return await fetchData(8);
 }
 
-/*==================================================
-  Exports
-  ==================================================*/
+
 
 module.exports = {
-  start: 1665446400, // Oct 11, 2022 00:00:00 GMT
+  start: 1665446400, // Oct 11, 2022 00:00:00 GMT as per messina bridge launch date
   ethereum: { tvl: tvlEth },
   algorand: { tvl: tvlAlgo}
 }
