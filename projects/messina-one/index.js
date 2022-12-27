@@ -1,7 +1,6 @@
 const { get } = require('../helper/http')
 const { fixBalancesTokens } = require('../helper/tokenMapping');
 
-let messinaTvls = [];
 let messinaAssets = [];
 
 const tokenChain = {
@@ -9,25 +8,10 @@ const tokenChain = {
   algorand: 8
 };
 
-const endpoint = 'https://messina.one/api';
-
-const fetchTvlDetails = async() => {
-  if (!messinaTvls.length) {
-    const response = await get(`${endpoint}/stats/tvl-details`);
-
-    messinaTvls = [];
-
-    response.forEach((r) => {
-      messinaTvls.push(...r.assets);
-    });
-  }
-
-  return messinaTvls;
-}
 
 const fetchAssets = async () => {
   if (!messinaAssets.length) {
-    messinaAssets = await get(`${endpoint}/bridge/get-assets?cache=true`);
+    messinaAssets = await get('https://messina.one/api/bridge/get-assets?cache=true');
   }
 
   return messinaAssets;
@@ -40,23 +24,20 @@ const tvlEth = async () => await processTvl(tokenChain.ethereum);
 const processTvl = async (chain) => {
   let balances = {};
 
-  messinaTvls = await fetchTvlDetails();
   messinaAssets = await fetchAssets();
 
-  const filteredTvls = messinaTvls.filter(t => t.chainId == chain);
+  const filteredTvls = messinaAssets.filter(t => t.chainId == chain);
   
   filteredTvls.forEach(f => {
-    const { id, amount }= f;
+    const { id, tvl, sourceDecimals }= f;
 
     if (chain == tokenChain.ethereum) {
-      const decimals = messinaAssets.find(n => n.id == id)?.sourceDecimals || 1;
-
-      balances[id] = amount * (10 ** decimals);
+      balances[id] = tvl;
     } else {
       // get coingeckoId
       const { coingeckoId } = fixBalancesTokens.algorand[id];
 
-      balances[coingeckoId] = amount;
+      balances[coingeckoId] = tvl * (0.1 ** sourceDecimals);
     }
   });
 
